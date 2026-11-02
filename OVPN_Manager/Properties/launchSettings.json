@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "OVPN_Manager (Package)": {
+      "commandName": "MsixPackage",
+      "doNotLaunchApp": true
+    },
+    "OVPN_Manager (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
