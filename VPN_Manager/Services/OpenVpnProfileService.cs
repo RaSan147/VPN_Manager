@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 
-namespace OVPN_Manager;
+namespace VPN_Manager;
 
 internal sealed record OpenVpnProfile(string Uid, string DisplayName, string ProfilePath);
 
@@ -47,14 +47,6 @@ internal sealed class OpenVpnProfileService
 
     public OpenVpnProfileService()
     {
-        try
-        {
-            DisconnectAndWait(TimeSpan.FromSeconds(10));
-        }
-        catch (Exception)
-        {
-        }
-
         _stateTimer = new Timer(
             _ => RefreshState(),
             null,
@@ -123,118 +115,157 @@ internal sealed class OpenVpnProfileService
         }
     }
 
+
     private OpenVpnConnectionState ComputeConnectionState(IReadOnlyList<OpenVpnProfile> profiles)
     {
         try
         {
-            if (Process.GetProcessesByName("openvpn").Length == 0)
+            var openvpnProcesses = Process.GetProcessesByName("openvpn");
+            try
             {
-                return new(OpenVpnConnectionStatus.Disconnected, null);
-            }
+                if (openvpnProcesses.Length == 0)
+                {
+                    return new(OpenVpnConnectionStatus.Disconnected, null);
+                }
 
-            string? profileDisplayName = null;
-            OpenVpnProfile? trackedProfile = null;
+                string? profileDisplayName = null;
+                OpenVpnProfile? trackedProfile = null;
 
-            lock (_tempProfileLock)
-            {
-                trackedProfile = _currentProfile;
-            }
+                lock (_tempProfileLock)
+                {
+                    trackedProfile = _currentProfile;
+                }
 
-            var logDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "OpenVPN",
-                "log");
-            FileInfo? latestLog;
-            if (trackedProfile is not null)
-            {
-                var trackedTempPath = GetCurrentTempProfilePath();
-                var trackedLog = trackedTempPath is null
-                    ? null
-                    : new FileInfo(Path.Combine(
-                        logDirectory,
-                        Path.GetFileNameWithoutExtension(trackedTempPath) + ".log"));
+                var logDirectory = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "OpenVPN",
+                    "log");
+                
+                FileInfo? latestLog = null;
 
-                latestLog = trackedLog is not null && trackedLog.Exists
-                    ? trackedLog
-                    : Directory.Exists(logDirectory)
-                        ? Directory.EnumerateFiles(logDirectory, "*.log")
+                if (trackedProfile is not null)
+                {
+                    var trackedTempPath = GetCurrentTempProfilePath();
+                    var trackedLog = trackedTempPath is null
+                        ? null
+                        : new FileInfo(Path.Combine(
+                            logDirectory,
+                            Path.GetFileNameWithoutExtension(trackedTempPath) + ".log"));
+
+                    latestLog = trackedLog is not null && trackedLog.Exists
+                        ? trackedLog
+                        : Directory.Exists(logDirectory)
+                            ? Directory.EnumerateFiles(logDirectory, "*.log")
+                                .Select(path => new FileInfo(path))
+                                .OrderByDescending(file => file.LastWriteTimeUtc)
+                                .FirstOrDefault()
+                            : null;
+                    if (latestLog is not null && !latestLog.Exists)
+                    {
+                        latestLog = null;
+                    }
+                }
+                else
+                {
+                    if (Directory.Exists(logDirectory))
+                    {
+                        var oldestStartTime = DateTime.UtcNow.AddHours(-1);
+                        try
+                        {
+                            var minStart = DateTime.MaxValue;
+                            foreach (var p in openvpnProcesses)
+                            {
+                                try
+                                {
+                                    var st = p.StartTime;
+                                    if (st < minStart) minStart = st;
+                                }
+                                catch { }
+                            }
+                            if (minStart != DateTime.MaxValue) oldestStartTime = minStart.AddSeconds(-5);
+                        }
+                        catch { }
+
+                        var recentLogs = Directory.EnumerateFiles(logDirectory, "*.log")
                             .Select(path => new FileInfo(path))
-                            .OrderByDescending(file => file.LastWriteTimeUtc)
-                            .FirstOrDefault()
-                        : null;
-                if (latestLog is not null && !latestLog.Exists)
-                {
-                    latestLog = null;
+                            .Where(f => f.LastWriteTimeUtc >= oldestStartTime)
+                            .OrderByDescending(f => f.LastWriteTimeUtc)
+                            .ToList();
+
+                        // 1. Try to find a log that is actively Connected
+                        latestLog = recentLogs.FirstOrDefault(log => ReadLogConnectionState(log) == OpenVpnConnectionStatus.Connected);
+
+                        // 2. If no connected log, try to find a log that is Connecting
+                        if (latestLog is null)
+                        {
+                            latestLog = recentLogs.FirstOrDefault(log => ReadLogConnectionState(log) == OpenVpnConnectionStatus.Connecting);
+                        }
+
+                        // 3. Fallback to the most recent log
+                        if (latestLog is null)
+                        {
+                            latestLog = recentLogs.FirstOrDefault();
+                        }
+                    }
                 }
-            }
-            else
-            {
-                latestLog = Directory.Exists(logDirectory)
-                    ? Directory.EnumerateFiles(logDirectory, "*.log")
-                        .Select(path => new FileInfo(path))
-                        .OrderByDescending(file => file.LastWriteTimeUtc)
-                        .FirstOrDefault()
-                    : null;
-            }
 
-            if (latestLog is null)
-            {
-                profileDisplayName = trackedProfile?.DisplayName;
-                return trackedProfile is null
-                    ? new(OpenVpnConnectionStatus.Connected, profileDisplayName)
-                    : new(OpenVpnConnectionStatus.Connecting, profileDisplayName);
-            }
-
-            if (ReadLogConnectionState(latestLog) == OpenVpnConnectionStatus.Connected)
-            {
-                profileDisplayName = trackedProfile?.DisplayName ??
-                    FindActiveConnectProfile(profiles)?.DisplayName;
-
-                if (profileDisplayName is null)
+                if (latestLog is null)
                 {
-                    var configName = latestLog.Name[..^latestLog.Extension.Length];
-                    var matches = profiles
-                        .Where(profile => string.Equals(
-                            Path.GetFileNameWithoutExtension(profile.ProfilePath),
-                            configName,
-                            StringComparison.OrdinalIgnoreCase))
-                        .ToArray();
-                    profileDisplayName = matches.Length == 1 ? matches[0].DisplayName : null;
+                    profileDisplayName = trackedProfile?.DisplayName;
+                    return trackedProfile is null
+                        ? new(OpenVpnConnectionStatus.Connected, profileDisplayName)
+                        : new(OpenVpnConnectionStatus.Connecting, profileDisplayName);
                 }
-            }
-            else
-            {
+
+                var currentLogState = ReadLogConnectionState(latestLog);
+
                 if (trackedProfile is not null)
                 {
                     profileDisplayName = trackedProfile.DisplayName;
                 }
                 else
                 {
-                    var activeProfile = FindActiveConnectProfile(profiles);
-                    if (activeProfile is not null)
-                    {
-                        profileDisplayName = activeProfile.DisplayName;
-                        return new(OpenVpnConnectionStatus.Connecting, profileDisplayName);
-                    }
-
-                    // Only use the log filename when it identifies exactly one profile.
+                    // PRIORITY FIX: Always trust the log filename first (Community GUI ground truth).
                     var configName = latestLog.Name[..^latestLog.Extension.Length];
+                    
                     var matches = profiles
                         .Where(profile => string.Equals(
                             Path.GetFileNameWithoutExtension(profile.ProfilePath),
                             configName,
                             StringComparison.OrdinalIgnoreCase))
                         .ToArray();
-                    profileDisplayName = matches.Length == 1 ? matches[0].DisplayName : null;
+
+                    if (matches.Length == 1)
+                    {
+                        profileDisplayName = matches[0].DisplayName;
+                    }
+                    else
+                    {
+                        // Fallback to config.json only if log filename matching fails
+                        profileDisplayName = FindActiveConnectProfile(profiles)?.DisplayName;
+                        
+                        // If still not found, just show the log filename (e.g., if connected via a separate GUI)
+                        if (profileDisplayName is null && !string.IsNullOrWhiteSpace(configName))
+                        {
+                            profileDisplayName = configName;
+                        }
+                    }
+                }
+
+                if (currentLogState == OpenVpnConnectionStatus.Connected)
+                {
+                    return new(OpenVpnConnectionStatus.Connected, profileDisplayName);
+                }
+
+                return new(OpenVpnConnectionStatus.Connecting, profileDisplayName);
+            }
+            finally
+            {
+                foreach (var p in openvpnProcesses)
+                {
+                    p.Dispose();
                 }
             }
-
-            if (ReadLogConnectionState(latestLog) == OpenVpnConnectionStatus.Connected)
-            {
-                return new(OpenVpnConnectionStatus.Connected, profileDisplayName);
-            }
-
-            return new(OpenVpnConnectionStatus.Connecting, profileDisplayName);
         }
         catch (UnauthorizedAccessException)
         {
@@ -246,6 +277,7 @@ internal sealed class OpenVpnProfileService
         return new(OpenVpnConnectionStatus.Disconnected, null);
     }
 
+    
     private OpenVpnConnectionStatus ReadLogConnectionState(FileInfo logFile)
     {
         try
@@ -256,18 +288,29 @@ internal sealed class OpenVpnProfileService
                 return OpenVpnConnectionStatus.Connecting;
             }
 
+            // FIX: Use LastIndexOf instead of Contains. 
+            // If a log had an error 10 minutes ago but successfully connected 1 minute ago, 
+            // Contains("error:") will falsely return Disconnected.
             var connectedIdx = log.LastIndexOf("CONNECTED,SUCCESS", StringComparison.OrdinalIgnoreCase);
             var initIdx = log.LastIndexOf("Initialization Sequence Completed", StringComparison.OrdinalIgnoreCase);
             var exitingIdx = log.LastIndexOf("EXITING", StringComparison.OrdinalIgnoreCase);
-            if ((connectedIdx >= 0 && connectedIdx > exitingIdx) ||
-                (initIdx >= 0 && initIdx > exitingIdx))
+            var authFailedIdx = log.LastIndexOf("AUTH_FAILED", StringComparison.OrdinalIgnoreCase);
+            var fatalIdx = log.LastIndexOf("Fatal error", StringComparison.OrdinalIgnoreCase);
+            var errorIdx = log.LastIndexOf("error:", StringComparison.OrdinalIgnoreCase);
+
+            bool isConnected = (connectedIdx >= 0 && connectedIdx > exitingIdx && connectedIdx > authFailedIdx && connectedIdx > fatalIdx) ||
+                               (initIdx >= 0 && initIdx > exitingIdx && initIdx > authFailedIdx && initIdx > fatalIdx);
+
+            if (isConnected)
             {
                 return OpenVpnConnectionStatus.Connected;
             }
 
-            if (log.Contains("AUTH_FAILED", StringComparison.OrdinalIgnoreCase) ||
-                log.Contains("Fatal error", StringComparison.OrdinalIgnoreCase) ||
-                log.Contains("error:", StringComparison.OrdinalIgnoreCase))
+            bool hasError = (authFailedIdx >= 0 && authFailedIdx > exitingIdx && authFailedIdx > initIdx && authFailedIdx > connectedIdx) ||
+                            (fatalIdx >= 0 && fatalIdx > exitingIdx && fatalIdx > initIdx && fatalIdx > connectedIdx) ||
+                            (errorIdx >= 0 && errorIdx > exitingIdx && errorIdx > initIdx && errorIdx > connectedIdx);
+
+            if (hasError)
             {
                 return OpenVpnConnectionStatus.Disconnected;
             }
@@ -281,6 +324,7 @@ internal sealed class OpenVpnProfileService
 
         return OpenVpnConnectionStatus.Connecting;
     }
+
 
     private static string? ReadLogText(string path)
     {
@@ -313,7 +357,7 @@ internal sealed class OpenVpnProfileService
     {
         var logPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "OVPN_Manager",
+            "VPN_Manager",
             "Logs",
             $"{profile.Uid}.log");
         if (!File.Exists(logPath))
@@ -503,7 +547,7 @@ internal sealed class OpenVpnProfileService
         {
             var tempDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "OVPN_Manager",
+                "VPN_Manager",
                 "Temp");
 
             if (Directory.Exists(tempDirectory))

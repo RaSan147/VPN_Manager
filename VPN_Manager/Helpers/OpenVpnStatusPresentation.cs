@@ -1,4 +1,4 @@
-namespace OVPN_Manager;
+namespace VPN_Manager;
 
 internal static class OpenVpnStatusPresentation
 {
@@ -13,7 +13,7 @@ internal static class OpenVpnStatusPresentation
     {
         OpenVpnConnectionStatus.Connecting => $"Connecting: {state.ProfileDisplayName ?? "profile"}",
         OpenVpnConnectionStatus.Connected => $"Connected: {state.ProfileDisplayName ?? "profile"}",
-        _ => "OVPN disconnected",
+        _ => "OpenVPN disconnected",
     };
 
     public static string PageSubtitle(OpenVpnConnectionStatus status) => status switch
@@ -25,8 +25,8 @@ internal static class OpenVpnStatusPresentation
 
     public static string DockTitle(OpenVpnConnectionState state) => state.Status switch
     {
-        OpenVpnConnectionStatus.Connecting => $"OVPN: Connecting {state.ProfileDisplayName ?? "profile"}",
-        OpenVpnConnectionStatus.Connected => $"{state.ProfileDisplayName ?? "Connected"} • OVPN",
-        _ => "OVPN: Off",
+        OpenVpnConnectionStatus.Connecting => $"OpenVPN: Connecting {state.ProfileDisplayName ?? "profile"}",
+        OpenVpnConnectionStatus.Connected => $"{state.ProfileDisplayName ?? "Connected"} • OpenVPN",
+        _ => "OpenVPN: Off",
     };
 }

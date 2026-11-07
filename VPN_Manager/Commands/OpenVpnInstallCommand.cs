@@ -2,7 +2,7 @@ using System.Diagnostics;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
-namespace OVPN_Manager;
+namespace VPN_Manager;
 
 internal sealed class OpenVpnInstallCommand : InvokableCommand
 {

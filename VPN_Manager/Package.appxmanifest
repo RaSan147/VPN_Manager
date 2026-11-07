@@ -9,14 +9,14 @@
   IgnorableNamespaces="uap uap3 rescap">
 
   <Identity
-    Name="OVPNManager"
+    Name="VPNManager"
     Publisher="CN=Microsoft Corporation, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
     Version="0.0.1.0" />
   <!-- When you're ready to publish your extension, you'll need to change the
        Publisher= to match your own identity -->
 
   <Properties>
-    <DisplayName>OVPN Manager</DisplayName>
+    <DisplayName>VPN Manager</DisplayName>
     <PublisherDisplayName>A Lone Developer</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
@@ -35,8 +35,8 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="OVPN Manager"
-        Description="OVPN Manager"
+        DisplayName="VPN Manager"
+        Description="VPN Manager"
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
@@ -46,8 +46,8 @@
       <Extensions>
         <com:Extension Category="windows.comServer">
           <com:ComServer>
-            <com:ExeServer Executable="OVPN_Manager.exe" Arguments="-RegisterProcessAsComServer" DisplayName="OVPN Manager">
-              <com:Class Id="6a2e5cbd-8b52-405b-9453-db136e14dbb7" DisplayName="OVPN Manager" />
+            <com:ExeServer Executable="VPN_Manager.exe" Arguments="-RegisterProcessAsComServer" DisplayName="VPN Manager">
+              <com:Class Id="6a2e5cbd-8b52-405b-9453-db136e14dbb7" DisplayName="VPN Manager" />
             </com:ExeServer>
           </com:ComServer>
         </com:Extension>
@@ -55,8 +55,8 @@
           <uap3:AppExtension Name="com.microsoft.commandpalette"
             Id="ID"
             PublicFolder="Public"
-            DisplayName="OVPN Manager"
-            Description="OVPN Manager">
+            DisplayName="VPN Manager"
+            Description="VPN Manager">
             <uap3:Properties>
               <CmdPalProvider>
                 <Activation>

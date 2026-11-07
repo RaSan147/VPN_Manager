@@ -7,16 +7,16 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using Microsoft.CommandPalette.Extensions;
 
-namespace OVPN_Manager;
+namespace VPN_Manager;
 
 [Guid("6a2e5cbd-8b52-405b-9453-db136e14dbb7")]
-public sealed partial class OVPN_Manager : IExtension, IDisposable
+public sealed partial class VPN_Manager : IExtension, IDisposable
 {
     private readonly ManualResetEvent _extensionDisposedEvent;
 
-    private readonly OVPN_ManagerCommandsProvider _provider = new();
+    private readonly VPN_ManagerCommandsProvider _provider = new();
 
-    public OVPN_Manager(ManualResetEvent extensionDisposedEvent)
+    public VPN_Manager(ManualResetEvent extensionDisposedEvent)
     {
         this._extensionDisposedEvent = extensionDisposedEvent;
     }
@@ -30,5 +30,9 @@ public sealed partial class OVPN_Manager : IExtension, IDisposable
         };
     }
 
-    public void Dispose() => this._extensionDisposedEvent.Set();
+    public void Dispose()
+    {
+        _provider.Dispose();
+        this._extensionDisposedEvent.Set();
+    }
 }

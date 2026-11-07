@@ -2,16 +2,16 @@ using System;
 using Microsoft.CommandPalette.Extensions;
 using Microsoft.CommandPalette.Extensions.Toolkit;
 
-namespace OVPN_Manager;
+namespace VPN_Manager;
 
-internal sealed class OpenVpnConnectCommand : InvokableCommand
+internal sealed partial class OpenVpnConnectCommand : InvokableCommand
 {
-    private readonly OpenVpnProfileService _profileService;
+    private readonly VpnConnectionManager _vpnManager;
     private readonly OpenVpnProfile _profile;
 
-    public OpenVpnConnectCommand(OpenVpnProfileService profileService, OpenVpnProfile profile)
+    public OpenVpnConnectCommand(VpnConnectionManager vpnManager, OpenVpnProfile profile)
     {
-        _profileService = profileService;
+        _vpnManager = vpnManager;
         _profile = profile;
         Id = $"connect-{profile.Uid}";
         Name = $"Connect to {profile.DisplayName}";
@@ -21,13 +21,7 @@ internal sealed class OpenVpnConnectCommand : InvokableCommand
     {
         try
         {
-            var executable = _profileService.FindOpenVpnGui();
-            if (executable is null)
-            {
-                return CommandResult.GoBack();
-            }
-
-            return _profileService.Connect(_profile, executable, TimeSpan.FromSeconds(10))
+            return _vpnManager.ConnectOpenVpn(_profile, TimeSpan.FromSeconds(10))
                 ? CommandResult.KeepOpen()
                 : CommandResult.GoBack();
         }
