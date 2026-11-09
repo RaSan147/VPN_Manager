@@ -22,11 +22,4 @@ internal static class OpenVpnStatusPresentation
         OpenVpnConnectionStatus.Connected => "Active connection",
         _ => "Select a profile to connect",
     };
-
-    public static string DockTitle(OpenVpnConnectionState state) => state.Status switch
-    {
-        OpenVpnConnectionStatus.Connecting => $"OpenVPN: Connecting {state.ProfileDisplayName ?? "profile"}",
-        OpenVpnConnectionStatus.Connected => $"{state.ProfileDisplayName ?? "Connected"} • OpenVPN",
-        _ => "OpenVPN: Off",
-    };
 }

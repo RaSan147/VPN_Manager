@@ -66,34 +66,7 @@ internal sealed partial class VPN_ManagerDockPage : ListPage
 
         // --- Button 1: open the full VPN Manager (profiles list, WARP toggle, etc.) ---
         // Wrapping a ListPage in a ListItem makes the dock button open it as a nested page.
-        string vpnTitle;
-        string vpnIcon;
-
-        if (ovpnState.IsConnected)
-        {
-            vpnTitle = $"{ovpnState.ProfileDisplayName ?? "VPN"} \u2022 On";
-            vpnIcon = "\uE73E"; // checkmark
-        }
-        else if (ovpnState.Status == OpenVpnConnectionStatus.Connecting)
-        {
-            vpnTitle = "OpenVPN: Connecting\u2026";
-            vpnIcon = "\uE895"; // sync
-        }
-        else if (warpState.Status == WarpConnectionStatus.Connected)
-        {
-            vpnTitle = "WARP \u2022 On";
-            vpnIcon = "\uE73E";
-        }
-        else if (warpState.Status == WarpConnectionStatus.Connecting)
-        {
-            vpnTitle = "WARP: Connecting\u2026";
-            vpnIcon = "\uE895";
-        }
-        else
-        {
-            vpnTitle = "VPN: Off";
-            vpnIcon = "\uE711";
-        }
+        var (vpnTitle, vpnIcon) = VpnDockPresentation.Status(ovpnState, warpState);
 
         // Opens the full VPN Manager page (with all profiles) on click.
         var openManagerItem = new ListItem(_mainPage)
