@@ -210,3 +210,5 @@ FakesAssemblies/
 
 # JetBrains Rider
 *.sln.iml
+# JetBrains IDE files
+.idea/
